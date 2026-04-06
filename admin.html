@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة الأدمن - General Media Tech</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>tailwind.config={theme:{extend:{colors:{primary:'#C41230',light:'#F5F5F5',dark:'#111111'},fontFamily:{sans:['Tajawal','sans-serif']}}}}</script>
+    <style>
+        .hide-scrollbar::-webkit-scrollbar{display:none}.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+        .tab-btn.active{background:#C41230;color:white}
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+        .modal-overlay.active{opacity:1;pointer-events:auto}
+        .modal-box{background:white;border-radius:16px;width:92%;max-width:420px;max-height:88vh;overflow-y:auto;padding:24px;transform:scale(.95);transition:transform .25s}
+        .modal-overlay.active .modal-box{transform:scale(1)}
+        input,textarea,select{font-family:'Tajawal',sans-serif;width:100%;background:#F5F5F5;border:1px solid transparent;border-radius:10px;padding:10px 12px;font-size:14px;outline:none;transition:border-color .2s}
+        input:focus,textarea:focus,select:focus{border-color:#C41230}
+        .drop-zone{border:2px dashed #e5e7eb;border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:#fafafa}
+        .drop-zone:hover,.drop-zone.drag-over{border-color:#C41230;background:#fff5f5}
+        .img-thumb{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;flex-shrink:0}
+        .img-thumb img{width:100%;height:100%;object-fit:cover}
+        .img-thumb .del-x{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:white;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0}
+        .up-track{height:3px;border-radius:99px;background:#f0f0f0;overflow:hidden;margin-top:6px}
+        .up-fill{height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,#C41230,#ff4d6d);transition:width .3s ease}
+    </style>
+</head>
+<body class="bg-[#F8F8F8] font-sans text-dark antialiased">
+
+<!-- LOGIN -->
+<div id="login-screen" class="fixed inset-0 bg-white z-[200] flex items-center justify-center">
+    <div class="w-[88%] max-w-sm">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <i class="ph-fill ph-shield-check text-white text-3xl"></i>
+            </div>
+            <h1 class="font-bold text-2xl">لوحة الإدارة</h1>
+            <p class="text-sm text-gray-500 mt-1">General Media Tech</p>
+        </div>
+        <input type="password" id="admin-pass" placeholder="كلمة المرور" class="mb-3 text-center text-lg tracking-widest">
+        <p id="login-error" class="text-red-500 text-xs text-center mb-3 hidden">كلمة المرور غير صحيحة</p>
+        <button onclick="adminLogin()" class="w-full bg-primary text-white rounded-[10px] py-3.5 font-bold hover:bg-red-800 transition-colors">دخول</button>
+    </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel" class="hidden min-h-screen">
+    <header class="bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between sticky top-0 z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 bg-primary rounded-xl flex items-center justify-center">
+                <i class="ph-fill ph-shield-check text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base leading-tight">لوحة الإدارة</h1>
+                <p class="text-[11px] text-gray-400">General Media Tech · Supabase</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="connection-status" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-500">جاري الفحص...</span>
+            <a href="index.html" target="_blank" class="text-sm text-gray-500 hover:text-primary transition-colors"><i class="ph ph-arrow-square-out"></i></a>
+            <button onclick="adminLogout()" class="text-sm text-gray-400 hover:text-red-500 transition-colors"><i class="ph ph-sign-out text-xl"></i></button>
+        </div>
+    </header>
+
+    <!-- Tabs — بدون تبويب الطلبات -->
+    <div class="bg-white border-b border-gray-100 px-4 pt-3 pb-0 flex gap-2 overflow-x-auto hide-scrollbar">
+        <button onclick="switchTab('categories')" class="tab-btn active text-sm font-medium px-4 py-2 rounded-t-[10px] transition-colors whitespace-nowrap" data-tab="categories">الأقسام</button>
+        <button onclick="switchTab('products')"   class="tab-btn text-sm font-medium px-4 py-2 rounded-t-[10px] transition-colors whitespace-nowrap text-gray-500" data-tab="products">المنتجات</button>
+        <button onclick="switchTab('banners')"    class="tab-btn text-sm font-medium px-4 py-2 rounded-t-[10px] transition-colors whitespace-nowrap text-gray-500" data-tab="banners">البانرات</button>
+        <button onclick="switchTab('upload')"     class="tab-btn text-sm font-medium px-4 py-2 rounded-t-[10px] transition-colors whitespace-nowrap text-gray-500" data-tab="upload">
+            <i class="ph ph-cloud-arrow-up ml-1"></i>رفع الصور
+        </button>
+    </div>
+
+    <div class="p-4 pb-20">
+
+        <!-- Categories Tab -->
+        <div id="tab-categories" class="tab-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-base">الأقسام</h2>
+                <button onclick="openCatModal()" class="bg-primary text-white text-sm px-4 py-2 rounded-[10px] flex items-center gap-1.5 hover:bg-red-800 transition-colors"><i class="ph ph-plus"></i> إضافة</button>
+            </div>
+            <div id="categories-list" class="flex flex-col gap-3"></div>
+        </div>
+
+        <!-- Products Tab -->
+        <div id="tab-products" class="tab-content hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-base">المنتجات</h2>
+                <button onclick="openProdModal()" class="bg-primary text-white text-sm px-4 py-2 rounded-[10px] flex items-center gap-1.5 hover:bg-red-800 transition-colors"><i class="ph ph-plus"></i> إضافة</button>
+            </div>
+            <div id="products-list" class="flex flex-col gap-3"></div>
+        </div>
+
+        <!-- Banners Tab -->
+        <div id="tab-banners" class="tab-content hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-base">البانرات</h2>
+                <button onclick="openBannerModal()" class="bg-primary text-white text-sm px-4 py-2 rounded-[10px] flex items-center gap-1.5 hover:bg-red-800 transition-colors"><i class="ph ph-plus"></i> إضافة</button>
+            </div>
+            <div id="banners-list" class="flex flex-col gap-3"></div>
+        </div>
+
+        <!-- Upload Tab -->
+        <div id="tab-upload" class="tab-content hidden">
+            <h2 class="font-bold text-base mb-4">رفع الصور — Supabase Storage</h2>
+            <div class="drop-zone" id="drop-zone"
+                 onclick="document.getElementById('bulk-picker').click()"
+                 ondragover="event.preventDefault();this.classList.add('drag-over')"
+                 ondragleave="this.classList.remove('drag-over')"
+                 ondrop="onDrop(event)">
+                <input type="file" id="bulk-picker" accept="image/*" multiple class="hidden" onchange="onBulkSelect(this.files)">
+                <i class="ph ph-cloud-arrow-up text-4xl text-gray-300 block mb-2"></i>
+                <p class="text-sm font-medium text-gray-500">اضغط أو اسحب الصور هنا</p>
+                <p class="text-xs text-gray-400 mt-1">PNG · JPG · WEBP — حتى 5 ميغا لكل صورة</p>
+            </div>
+            <div id="bulk-progress-wrap" class="hidden mt-3">
+                <div class="flex justify-between text-xs text-gray-500 mb-1">
+                    <span id="bulk-status">جاري الرفع...</span>
+                    <span id="bulk-pct">0%</span>
+                </div>
+                <div class="up-track"><div class="up-fill" id="bulk-bar"></div></div>
+            </div>
+            <div class="mt-5">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold text-gray-700">الصور المخزّنة</h3>
+                    <button onclick="loadStorageImages()" class="text-xs text-gray-400 hover:text-primary flex items-center gap-1 transition-colors"><i class="ph ph-arrows-clockwise"></i> تحديث</button>
+                </div>
+                <div id="storage-grid" class="grid grid-cols-3 gap-3">
+                    <div class="text-center text-gray-400 py-8 col-span-3 text-sm"><i class="ph ph-images text-3xl block mb-2 opacity-40"></i>لا توجد صور بعد</div>
+                </div>
+            </div>
+            <div id="copied-toast" class="hidden mt-3 bg-green-50 border border-green-200 text-green-700 text-xs rounded-[10px] px-4 py-3 flex items-center gap-2">
+                <i class="ph ph-check-circle text-base"></i>
+                <span id="copied-url" class="flex-1 truncate font-mono"></span>
+                <span class="font-bold whitespace-nowrap">تم النسخ ✓</span>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Category Modal -->
+<div id="cat-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="flex justify-between items-center mb-5">
+            <h3 id="cat-modal-title" class="font-bold text-base">إضافة قسم</h3>
+            <button onclick="closeModal('cat-modal')" class="w-8 h-8 bg-light rounded-full flex items-center justify-center"><i class="ph ph-x text-sm text-gray-500"></i></button>
+        </div>
+        <input type="hidden" id="cat-id">
+        <div class="flex flex-col gap-3">
+            <input type="text"   id="cat-name"  placeholder="اسم القسم *">
+            <input type="text"   id="cat-icon"  placeholder="أيقونة Phosphor (مثال: ph-camera)">
+            <div>
+                <label class="text-xs text-gray-500 mb-1 block">صورة القسم</label>
+                <div class="flex gap-2 mb-2">
+                    <input type="url" id="cat-image" placeholder="رابط الصورة أو ارفع ←" class="flex-1">
+                    <button type="button" onclick="inlineUpload('cat-image','cat-img-prev','single')"
+                        class="flex-shrink-0 bg-primary text-white text-xs px-3 py-2 rounded-[10px] flex items-center gap-1 hover:bg-red-800 transition-colors whitespace-nowrap">
+                        <i class="ph ph-cloud-arrow-up"></i> رفع
+                    </button>
+                </div>
+                <div id="cat-img-prev" class="hidden w-16 h-16 rounded-[8px] overflow-hidden border border-gray-200"><img src="" class="w-full h-full object-contain"></div>
+            </div>
+            <input type="number" id="cat-order" placeholder="الترتيب (رقم)" min="1">
+        </div>
+        <div class="flex gap-2 mt-5">
+            <button onclick="saveCategory()" class="flex-1 bg-primary text-white rounded-[10px] py-3 font-bold hover:bg-red-800 transition-colors">حفظ</button>
+            <button onclick="closeModal('cat-modal')" class="flex-1 bg-light text-gray-600 rounded-[10px] py-3 font-medium">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- Product Modal -->
+<div id="prod-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="flex justify-between items-center mb-5">
+            <h3 id="prod-modal-title" class="font-bold text-base">إضافة منتج</h3>
+            <button onclick="closeModal('prod-modal')" class="w-8 h-8 bg-light rounded-full flex items-center justify-center"><i class="ph ph-x text-sm text-gray-500"></i></button>
+        </div>
+        <input type="hidden" id="prod-id">
+        <div class="flex flex-col gap-3">
+            <input type="text"   id="prod-name"  placeholder="اسم المنتج *">
+            <input type="number" id="prod-price" placeholder="السعر الأساسي *" min="0" step="0.01">
+            <select id="prod-category"><option value="">اختر القسم *</option></select>
+            <div>
+                <label class="text-xs text-gray-500 mb-1 block">صور المنتج</label>
+                <button type="button" onclick="inlineUpload('prod-images','prod-imgs-prev','multi')"
+                    class="w-full bg-primary/10 text-primary text-sm font-medium py-2.5 rounded-[10px] flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors mb-2">
+                    <i class="ph ph-cloud-arrow-up text-lg"></i> ارفع صور من الجهاز مباشرة
+                </button>
+                <div id="prod-imgs-prev" class="flex flex-wrap gap-2 mb-2"></div>
+                <label class="text-xs text-gray-400 mb-1 block">أو أدخل روابط يدوياً (رابط في كل سطر)</label>
+                <textarea id="prod-images" placeholder="https://..." class="resize-none h-16 text-xs"></textarea>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 mb-1 block">وصف المنتج (اختياري)</label>
+                <textarea id="prod-description" placeholder="أدخل وصف المنتج هنا..." class="resize-none h-16"></textarea>
+            </div>
+            <input type="number" id="prod-stock" placeholder="المخزون (0 = غير محدد)" min="0">
+            <input type="number" id="prod-order" placeholder="الترتيب (رقم)" min="1">
+            <div class="border-t border-gray-100 pt-3">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs text-gray-500 font-medium">خيارات المنتج (variants)</label>
+                    <button type="button" onclick="addVariantGroup()" class="text-xs bg-light text-gray-600 px-3 py-1.5 rounded-[8px] hover:bg-gray-200 transition-colors flex items-center gap-1"><i class="ph ph-plus text-xs"></i> خيار جديد</button>
+                </div>
+                <div id="prod-variants-container" class="flex flex-col gap-2"></div>
+            </div>
+        </div>
+        <div class="flex gap-2 mt-5">
+            <button onclick="saveProduct()" class="flex-1 bg-primary text-white rounded-[10px] py-3 font-bold hover:bg-red-800 transition-colors">حفظ</button>
+            <button onclick="closeModal('prod-modal')" class="flex-1 bg-light text-gray-600 rounded-[10px] py-3 font-medium">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- Banner Modal -->
+<div id="banner-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="flex justify-between items-center mb-5">
+            <h3 id="banner-modal-title" class="font-bold text-base">إضافة بانر</h3>
+            <button onclick="closeModal('banner-modal')" class="w-8 h-8 bg-light rounded-full flex items-center justify-center"><i class="ph ph-x text-sm text-gray-500"></i></button>
+        </div>
+        <input type="hidden" id="banner-id">
+        <div class="flex flex-col gap-3">
+            <select id="banner-type"><option value="banners">سلايدر رئيسي</option><option value="promo_banners">ترويجي (أعلى الصفحة)</option></select>
+            <input type="text" id="banner-title"    placeholder="العنوان (اختياري)">
+            <input type="text" id="banner-subtitle" placeholder="العنوان الفرعي (اختياري)">
+            <div>
+                <label class="text-xs text-gray-500 mb-1 block">صورة البانر</label>
+                <button type="button" onclick="inlineUpload('banner-image','banner-img-prev','single')"
+                    class="w-full bg-primary/10 text-primary text-sm font-medium py-2.5 rounded-[10px] flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors mb-2">
+                    <i class="ph ph-cloud-arrow-up text-lg"></i> ارفع صورة من الجهاز
+                </button>
+                <div id="banner-img-prev" class="hidden mb-2 w-full h-28 rounded-[10px] overflow-hidden border border-gray-200 bg-light"><img src="" class="w-full h-full object-cover"></div>
+                <input type="url" id="banner-image" placeholder="أو أدخل رابط الصورة يدوياً *">
+            </div>
+            <input type="url" id="banner-link" placeholder="الرابط عند الضغط (اختياري)">
+        </div>
+        <div class="flex gap-2 mt-5">
+            <button onclick="saveBanner()" class="flex-1 bg-primary text-white rounded-[10px] py-3 font-bold hover:bg-red-800 transition-colors">حفظ</button>
+            <button onclick="closeModal('banner-modal')" class="flex-1 bg-light text-gray-600 rounded-[10px] py-3 font-medium">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Delete -->
+<div id="confirm-modal" class="modal-overlay">
+    <div class="modal-box text-center">
+        <i class="ph ph-trash text-4xl text-red-400 block mb-3"></i>
+        <h3 class="font-bold text-base mb-2">تأكيد الحذف</h3>
+        <p class="text-sm text-gray-500 mb-5">هل أنت متأكد؟ لا يمكن التراجع.</p>
+        <div class="flex gap-2">
+            <button id="confirm-delete-btn" class="flex-1 bg-red-500 text-white rounded-[10px] py-3 font-bold hover:bg-red-600 transition-colors">حذف</button>
+            <button onclick="closeModal('confirm-modal')" class="flex-1 bg-light text-gray-600 rounded-[10px] py-3 font-medium">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="admin-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-[300] bg-gray-900 text-white text-sm font-medium px-5 py-3 rounded-full shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none"></div>
+
+<!-- hidden pickers -->
+<input type="file" id="pick-single" accept="image/*"          class="hidden">
+<input type="file" id="pick-multi"  accept="image/*" multiple class="hidden">
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════════════════════
+const CONFIG = {
+    SUPABASE_URL:      'https://tupldwylzrkjzqtaiscv.supabase.co',
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cGxkd3lsenJranpxdGFpc2N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0OTEzNTQsImV4cCI6MjA5MTA2NzM1NH0.RKsdAg4v7TcuMhBepztJtRdTtsR-f8cMcoDXKmnZXO0',
+    TABLE_STORE:       'gmt_store',
+    TABLE_COMMENTS:    'gmt_comments',
+    STORAGE_BUCKET:    'gmt-images',     // bucket تنشئه في Supabase Storage
+    JSONBIN_API_KEY:   '$2a$10$vC0Evv1i72n9vOlH36x.2Ot9Nt2Pz4ToGhm4mdcEx69Lb/TzYlpOe',
+    ORDERS_BIN_ID:     '69adf58dd0ea881f40fdbe19',
+    ADMIN_PASSWORD:    'admin'
+};
+const _sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+let adminData = { categories:[], products:[], banners:[], promo_banners:[] };
+
+// ── AUTH ──────────────────────────────────────────────────────
+function adminLogin() {
+    if (document.getElementById('admin-pass').value === CONFIG.ADMIN_PASSWORD) {
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('admin-panel').classList.remove('hidden');
+        loadAllData(); checkConnection();
+    } else {
+        const e = document.getElementById('login-error');
+        e.classList.remove('hidden'); setTimeout(()=>e.classList.add('hidden'),2000);
+    }
+}
+function adminLogout() { document.getElementById('admin-panel').classList.add('hidden'); document.getElementById('login-screen').classList.remove('hidden'); }
+document.getElementById('admin-pass').addEventListener('keypress', e=>{ if(e.key==='Enter') adminLogin(); });
+
+// ── CONNECTION ────────────────────────────────────────────────
+async function checkConnection() {
+    const el = document.getElementById('connection-status');
+    try {
+        const {error} = await _sb.from(CONFIG.TABLE_STORE).select('id').eq('id',1).single();
+        if (error) throw error;
+        el.textContent='✅ متصل'; el.className='text-xs px-2 py-1 rounded-full bg-green-50 text-green-600';
+    } catch {
+        el.textContent='❌ فشل'; el.className='text-xs px-2 py-1 rounded-full bg-red-50 text-red-500';
+        showToast('فشل الاتصال — تحقق من SUPABASE_URL و ANON_KEY','error');
+    }
+}
+
+// ── DATA LAYER ────────────────────────────────────────────────
+async function fetchStore() { const {data,error}=await _sb.from(CONFIG.TABLE_STORE).select('*').eq('id',1).single(); if(error) throw error; return data; }
+async function updateField(field,value) { const {error}=await _sb.from(CONFIG.TABLE_STORE).update({[field]:value}).eq('id',1); if(error) throw error; }
+
+async function loadAllData() {
+    ['categories-list','products-list','banners-list'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.innerHTML='<div class="flex items-center justify-center py-10 gap-3 text-gray-400"><div class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div><span class="text-sm">جاري التحميل...</span></div>';
+    });
+    try {
+        const rec = await fetchStore();
+        adminData.categories    = Array.isArray(rec.categories)    ? rec.categories    : [];
+        adminData.products      = Array.isArray(rec.products)       ? rec.products      : [];
+        adminData.banners       = Array.isArray(rec.banners)        ? rec.banners       : [];
+        adminData.promo_banners = Array.isArray(rec.promo_banners)  ? rec.promo_banners : [];
+        showToast(`${adminData.categories.length} قسم · ${adminData.products.length} منتج`);
+        renderAllTabs();
+    } catch(e) { showToast('فشل التحميل: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SUPABASE STORAGE UPLOAD
+// ══════════════════════════════════════════════════════════════
+function _safeName(file) {
+    const ext  = file.name.split('.').pop().toLowerCase()||'jpg';
+    const base = file.name.replace(/\.[^.]+$/,'').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,40);
+    return `${base}_${Date.now()}.${ext}`;
+}
+async function uploadOne(file) {
+    const path = _safeName(file);
+    const {error} = await _sb.storage.from(CONFIG.STORAGE_BUCKET).upload(path,file,{cacheControl:'3600',upsert:false});
+    if (error) throw error;
+    return _sb.storage.from(CONFIG.STORAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+// رفع inline مدمج داخل المودال (قسم / بانر = single, منتج = multi)
+function inlineUpload(targetId, previewId, mode) {
+    const picker = document.getElementById(mode==='multi' ? 'pick-multi' : 'pick-single');
+    picker.value = '';
+    picker.onchange = async () => {
+        const files = Array.from(picker.files||[]);
+        if (!files.length) return;
+        showToast('جاري الرفع...');
+        for (const file of files) {
+            try {
+                const url = await uploadOne(file);
+                if (mode==='single') {
+                    document.getElementById(targetId).value = url;
+                    const prev = document.getElementById(previewId);
+                    if (prev) { prev.classList.remove('hidden'); prev.querySelector('img').src=url; }
+                } else {
+                    const area = document.getElementById(targetId);
+                    area.value = area.value.trim() ? area.value.trim()+'\n'+url : url;
+                    const prev = document.getElementById(previewId);
+                    if (prev) {
+                        const t = document.createElement('div'); t.className='img-thumb';
+                        t.innerHTML=`<img src="${url}"><button class="del-x" onclick="removeThumb(this,'${targetId}','${url}')">✕</button>`;
+                        prev.appendChild(t);
+                    }
+                }
+                showToast('تم الرفع ✓');
+            } catch(e) { showToast('فشل الرفع: '+e.message,'error'); }
+        }
+    };
+    picker.click();
+}
+function removeThumb(btn,areaId,url) {
+    btn.closest('.img-thumb')?.remove();
+    const a=document.getElementById(areaId); if(a) a.value=a.value.split('\n').filter(l=>l.trim()!==url).join('\n');
+}
+window.removeThumb=removeThumb; window.inlineUpload=inlineUpload;
+
+// ── تبويب رفع الصور الرئيسي ──────────────────────────────────
+function onDrop(e) {
+    e.preventDefault(); document.getElementById('drop-zone').classList.remove('drag-over');
+    const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
+    if(files.length) batchUpload(files);
+}
+function onBulkSelect(files) { batchUpload(Array.from(files).filter(f=>f.type.startsWith('image/'))); }
+window.onDrop=onDrop; window.onBulkSelect=onBulkSelect;
+
+async function batchUpload(files) {
+    const wrap=document.getElementById('bulk-progress-wrap');
+    const bar=document.getElementById('bulk-bar'),pct=document.getElementById('bulk-pct'),stat=document.getElementById('bulk-status');
+    wrap.classList.remove('hidden'); bar.style.width='0%'; pct.textContent='0%';
+    let done=0;
+    for (const file of files) {
+        stat.textContent='رفع: '+file.name.slice(0,28)+'...';
+        try { await uploadOne(file); done++; const p=Math.round(done/files.length*100); bar.style.width=p+'%'; pct.textContent=p+'%'; }
+        catch(e) { showToast('فشل: '+file.name,'error'); }
+    }
+    stat.textContent=`تم رفع ${done} من ${files.length} ✓`;
+    setTimeout(()=>wrap.classList.add('hidden'),3000);
+    loadStorageImages();
+}
+
+async function loadStorageImages() {
+    const grid=document.getElementById('storage-grid');
+    grid.innerHTML='<div class="col-span-3 flex justify-center py-8"><div class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>';
+    try {
+        const {data,error}=await _sb.storage.from(CONFIG.STORAGE_BUCKET).list('',{limit:100,sortBy:{column:'created_at',order:'desc'}});
+        if(error) throw error;
+        const files=(data||[]).filter(f=>f.name&&!f.name.endsWith('/'));
+        if(!files.length){ grid.innerHTML='<div class="text-center text-gray-400 py-8 col-span-3 text-sm"><i class="ph ph-images text-3xl block mb-2 opacity-40"></i>لا توجد صور بعد</div>'; return; }
+        grid.innerHTML='';
+        files.forEach(file=>{
+            const url=_sb.storage.from(CONFIG.STORAGE_BUCKET).getPublicUrl(file.name).data.publicUrl;
+            const c=document.createElement('div');
+            c.className='relative group rounded-[10px] overflow-hidden border border-gray-100 bg-light aspect-square cursor-pointer';
+            c.innerHTML=`<img src="${url}" class="w-full h-full object-cover" loading="lazy">
+            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                <button onclick="copyImgUrl('${url}')" title="نسخ الرابط" class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-gray-700 hover:text-primary shadow"><i class="ph ph-copy text-sm"></i></button>
+                <button onclick="deleteImg('${file.name}',this)" title="حذف" class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-red-400 hover:text-red-600 shadow"><i class="ph ph-trash text-sm"></i></button>
+            </div>
+            <p class="absolute bottom-0 inset-x-0 bg-black/40 text-white text-[9px] px-1.5 py-1 truncate">${file.name}</p>`;
+            grid.appendChild(c);
+        });
+    } catch(e) { grid.innerHTML=`<div class="text-center text-red-400 py-8 col-span-3 text-sm">${e.message}</div>`; }
+}
+async function deleteImg(name,btn) {
+    if(!confirm('حذف "'+name+'"؟')) return;
+    btn.disabled=true;
+    const {error}=await _sb.storage.from(CONFIG.STORAGE_BUCKET).remove([name]);
+    if(!error){ btn.closest('.relative')?.remove(); showToast('تم الحذف ✓'); }
+    else{ showToast('فشل: '+error.message,'error'); btn.disabled=false; }
+}
+function copyImgUrl(url) {
+    navigator.clipboard.writeText(url).then(()=>{
+        const t=document.getElementById('copied-toast'); document.getElementById('copied-url').textContent=url;
+        t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),3000);
+    }).catch(()=>{ showToast('تم النسخ ✓'); });
+}
+window.loadStorageImages=loadStorageImages; window.deleteImg=deleteImg; window.copyImgUrl=copyImgUrl;
+
+// ══════════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════════
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el=>el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(el=>{el.classList.remove('active');el.classList.add('text-gray-500');});
+    document.getElementById('tab-'+tab).classList.remove('hidden');
+    const btn=document.querySelector('[data-tab="'+tab+'"]'); btn.classList.add('active'); btn.classList.remove('text-gray-500');
+    if(tab==='upload') loadStorageImages();
+}
+function renderAllTabs(){renderCategoriesAdmin();renderProductsAdmin();renderBannersAdmin();}
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORIES
+// ══════════════════════════════════════════════════════════════
+function renderCategoriesAdmin(){
+    const c=document.getElementById('categories-list');
+    if(!adminData.categories.length){c.innerHTML='<div class="text-center text-gray-400 py-10 text-sm"><i class="ph ph-folder-open text-4xl block mb-2"></i>لا توجد أقسام بعد</div>';return;}
+    c.innerHTML=[...adminData.categories].sort((a,b)=>(a.order||0)-(b.order||0)).map(cat=>`
+    <div class="bg-white rounded-[12px] p-4 flex items-center justify-between shadow-sm border border-gray-50">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-light rounded-[10px] flex items-center justify-center text-primary text-xl overflow-hidden">
+                ${cat.image?`<img src="${cat.image}" class="w-full h-full object-contain rounded-[8px]" onerror="this.parentElement.innerHTML='<i class=\\'ph ${cat.icon||'ph-squares-four'}\\'></i>'">`:`<i class="ph ${cat.icon||'ph-squares-four'}"></i>`}
+            </div>
+            <div><p class="font-medium text-sm">${cat.name}</p><p class="text-xs text-gray-400">${cat.icon||'—'} · ترتيب: ${cat.order||0}</p></div>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="openCatModal('${cat.id}')" class="w-8 h-8 bg-blue-50 text-blue-500 rounded-[8px] flex items-center justify-center hover:bg-blue-100"><i class="ph ph-pencil-simple text-sm"></i></button>
+            <button onclick="confirmDelete('cat','${cat.id}')" class="w-8 h-8 bg-red-50 text-red-500 rounded-[8px] flex items-center justify-center hover:bg-red-100"><i class="ph ph-trash text-sm"></i></button>
+        </div>
+    </div>`).join('');
+}
+function openCatModal(id=null){
+    clearForm(['cat-id','cat-name','cat-icon','cat-image','cat-order']);
+    const p=document.getElementById('cat-img-prev'); if(p){p.classList.add('hidden');p.querySelector('img').src='';}
+    document.getElementById('cat-modal-title').textContent=id?'تعديل قسم':'إضافة قسم';
+    if(id){const cat=adminData.categories.find(c=>c.id===id);if(cat){document.getElementById('cat-id').value=cat.id;document.getElementById('cat-name').value=cat.name||'';document.getElementById('cat-icon').value=cat.icon||'';document.getElementById('cat-image').value=cat.image||'';document.getElementById('cat-order').value=cat.order||'';if(cat.image&&p){p.classList.remove('hidden');p.querySelector('img').src=cat.image;}}}
+    openModal('cat-modal');
+}
+async function saveCategory(){
+    const id=document.getElementById('cat-id').value,name=document.getElementById('cat-name').value.trim();
+    if(!name) return showToast('اسم القسم مطلوب','error');
+    const d={id:id||'c'+Date.now(),name,icon:document.getElementById('cat-icon').value.trim()||'ph-squares-four',image:document.getElementById('cat-image').value.trim()||'',order:parseInt(document.getElementById('cat-order').value)||adminData.categories.length+1};
+    if(id){const i=adminData.categories.findIndex(c=>c.id===id);if(i>-1)adminData.categories[i]=d;}else adminData.categories.push(d);
+    try{await updateField('categories',adminData.categories);closeModal('cat-modal');renderCategoriesAdmin();showToast('تم الحفظ ✓');}catch(e){showToast('خطأ: '+e.message,'error');}
+}
+
+// ══════════════════════════════════════════════════════════════
+// PRODUCTS
+// ══════════════════════════════════════════════════════════════
+function renderProductsAdmin(){
+    const c=document.getElementById('products-list');
+    if(!adminData.products.length){c.innerHTML='<div class="text-center text-gray-400 py-10 text-sm"><i class="ph ph-package text-4xl block mb-2"></i>لا توجد منتجات بعد</div>';return;}
+    c.innerHTML=[...adminData.products].sort((a,b)=>(a.order||0)-(b.order||0)).map(prod=>{
+        const cat=adminData.categories.find(c=>c.id===prod.category_id),img=prod.images?.[0]||'';
+        return`<div class="bg-white rounded-[12px] p-4 flex items-center justify-between shadow-sm border border-gray-50">
+        <div class="flex items-center gap-3 min-w-0">
+            <div class="w-12 h-12 bg-light rounded-[10px] flex items-center justify-center flex-shrink-0 overflow-hidden">${img?`<img src="${img}" class="w-full h-full object-contain" style="mix-blend-mode:multiply">`:'<i class="ph ph-image text-gray-300 text-xl"></i>'}</div>
+            <div class="min-w-0"><p class="font-medium text-sm truncate">${prod.name}</p><p class="text-xs text-gray-400">${cat?.name||'—'} · $${parseFloat(prod.price||0).toFixed(2)}</p></div>
+        </div>
+        <div class="flex gap-2 flex-shrink-0">
+            <button onclick="openProdModal('${prod.id}')" class="w-8 h-8 bg-blue-50 text-blue-500 rounded-[8px] flex items-center justify-center hover:bg-blue-100"><i class="ph ph-pencil-simple text-sm"></i></button>
+            <button onclick="confirmDelete('prod','${prod.id}')" class="w-8 h-8 bg-red-50 text-red-500 rounded-[8px] flex items-center justify-center hover:bg-red-100"><i class="ph ph-trash text-sm"></i></button>
+        </div></div>`;
+    }).join('');
+}
+function openProdModal(id=null){
+    clearForm(['prod-id','prod-name','prod-price','prod-category','prod-images','prod-description','prod-stock','prod-order']);
+    document.getElementById('prod-variants-container').innerHTML='';
+    document.getElementById('prod-imgs-prev').innerHTML='';
+    _vc=0;
+    const sel=document.getElementById('prod-category');
+    sel.innerHTML='<option value="">اختر القسم *</option>'+adminData.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    document.getElementById('prod-modal-title').textContent=id?'تعديل منتج':'إضافة منتج';
+    if(id){const p=adminData.products.find(x=>x.id===id);if(p){
+        document.getElementById('prod-id').value=p.id;document.getElementById('prod-name').value=p.name||'';document.getElementById('prod-price').value=p.price||'';
+        document.getElementById('prod-category').value=p.category_id||'';document.getElementById('prod-images').value=(p.images||[]).join('\n');
+        document.getElementById('prod-description').value=p.description||'';document.getElementById('prod-stock').value=p.stock!==undefined?p.stock:'';document.getElementById('prod-order').value=p.order||'';
+        const prev=document.getElementById('prod-imgs-prev');
+        (p.images||[]).forEach(url=>{const t=document.createElement('div');t.className='img-thumb';t.innerHTML=`<img src="${url}"><button class="del-x" onclick="removeThumb(this,'prod-images','${url}')">✕</button>`;prev.appendChild(t);});
+        if(p.options?.length) p.options.forEach(opt=>addVariantGroup(opt));
+    }}
+    openModal('prod-modal');
+}
+let _vc=0;
+window.addVariantGroup=function(ex=null){
+    _vc++;const gid='vg_'+_vc,c=document.getElementById('prod-variants-container'),aff=ex?.affectsPrice||false;
+    const g=document.createElement('div');g.className='bg-light rounded-[10px] p-3 flex flex-col gap-2';g.id=gid;
+    g.innerHTML=`<div class="flex items-center justify-between gap-2"><input type="text" placeholder="اسم الخيار" value="${ex?.type||''}" data-variant-type class="flex-1 text-xs py-2 px-3 rounded-[8px]"><button type="button" onclick="document.getElementById('${gid}').remove()" class="w-7 h-7 bg-red-50 text-red-400 rounded-[8px] flex items-center justify-center flex-shrink-0 hover:bg-red-100"><i class="ph ph-trash text-xs"></i></button></div><div class="flex items-center gap-2"><label class="text-xs text-gray-500 flex items-center gap-1.5 cursor-pointer"><input type="checkbox" ${aff?'checked':''} data-variant-affects-price onchange="toggleVPM('${gid}',this.checked)" class="w-4 h-4 accent-primary cursor-pointer">يؤثر على السعر</label></div><div data-vvc class="flex flex-col gap-1.5"></div><button type="button" onclick="addVV('${gid}')" class="text-xs text-gray-500 border border-dashed border-gray-300 rounded-[8px] py-1.5 hover:border-primary hover:text-primary transition-colors">+ إضافة قيمة</button>`;
+    c.appendChild(g);
+    if(ex?.values?.length) ex.values.forEach(v=>addVV(gid,aff,v)); else addVV(gid,aff);
+};
+window.toggleVPM=function(gid,aff){const g=document.getElementById(gid);if(!g)return;g.querySelector('[data-vvc]').innerHTML='';addVV(gid,aff);};
+window.addVV=function(gid,aff=null,ex=null){const g=document.getElementById(gid);if(!g)return;const chk=g.querySelector('[data-variant-affects-price]');if(aff===null)aff=chk?chk.checked:false;const vc=g.querySelector('[data-vvc]');const row=document.createElement('div');row.className='flex gap-2';if(aff){const nv=ex?.name||'',pv=ex?.price!==undefined?ex.price:'';row.innerHTML=`<input type="text" placeholder="الاسم" value="${nv}" data-vvn class="flex-1 text-xs py-1.5 px-2 rounded-[8px]"><input type="number" placeholder="السعر" value="${pv}" data-vvp min="0" step="0.01" class="w-24 text-xs py-1.5 px-2 rounded-[8px]"><button type="button" onclick="this.closest('.flex').remove()" class="w-7 h-7 bg-white text-gray-400 rounded-[8px] flex items-center justify-center flex-shrink-0 hover:text-red-400 border border-gray-100"><i class="ph ph-x text-xs"></i></button>`;}else{const val=typeof ex==='string'?ex:(ex?.name||'');row.innerHTML=`<input type="text" placeholder="القيمة" value="${val}" data-vvt class="flex-1 text-xs py-1.5 px-2 rounded-[8px]"><button type="button" onclick="this.closest('.flex').remove()" class="w-7 h-7 bg-white text-gray-400 rounded-[8px] flex items-center justify-center flex-shrink-0 hover:text-red-400 border border-gray-100"><i class="ph ph-x text-xs"></i></button>`;}vc.appendChild(row);};
+function collectVariants(){const c=document.getElementById('prod-variants-container');if(!c)return[];const opts=[];c.querySelectorAll('[id^="vg_"]').forEach(g=>{const t=g.querySelector('[data-variant-type]')?.value?.trim()||'';const aff=g.querySelector('[data-variant-affects-price]')?.checked||false;let vals=[];if(aff){g.querySelectorAll('[data-vvn]').forEach((n,i)=>{const p=g.querySelectorAll('[data-vvp]')[i];const name=n.value.trim();const price=parseFloat(p?.value||0);if(name)vals.push({name,price});});}else{g.querySelectorAll('[data-vvt]').forEach(el=>{const v=el.value.trim();if(v)vals.push(v);});}if(t&&vals.length)opts.push({type:t,affectsPrice:aff,values:vals});});return opts;}
+async function saveProduct(){
+    const id=document.getElementById('prod-id').value,name=document.getElementById('prod-name').value.trim();
+    const price=parseFloat(document.getElementById('prod-price').value),cat=document.getElementById('prod-category').value;
+    if(!name) return showToast('اسم المنتج مطلوب','error');
+    if(isNaN(price)||price<0) return showToast('السعر غير صحيح','error');
+    if(!cat) return showToast('يرجى اختيار القسم','error');
+    const images=document.getElementById('prod-images').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const opts=collectVariants();
+    const d={id:id||'p'+Date.now(),name,price,category_id:cat,images,description:document.getElementById('prod-description').value.trim(),stock:parseInt(document.getElementById('prod-stock').value)||0,order:parseInt(document.getElementById('prod-order').value)||adminData.products.length+1,options:opts.length?opts:undefined};
+    if(id){const i=adminData.products.findIndex(p=>p.id===id);if(i>-1)adminData.products[i]=d;}else adminData.products.push(d);
+    try{await updateField('products',adminData.products);closeModal('prod-modal');renderProductsAdmin();showToast('تم الحفظ ✓');}catch(e){showToast('خطأ: '+e.message,'error');}
+}
+
+// ══════════════════════════════════════════════════════════════
+// BANNERS
+// ══════════════════════════════════════════════════════════════
+function renderBannersAdmin(){
+    const c=document.getElementById('banners-list');
+    const all=[...adminData.banners.map(b=>({...b,_t:'banners',_l:'سلايدر رئيسي'})),...adminData.promo_banners.map(b=>({...b,_t:'promo_banners',_l:'ترويجي'}))];
+    if(!all.length){c.innerHTML='<div class="text-center text-gray-400 py-10 text-sm"><i class="ph ph-image text-4xl block mb-2"></i>لا توجد بانرات بعد</div>';return;}
+    c.innerHTML=all.map(b=>`<div class="bg-white rounded-[12px] overflow-hidden shadow-sm border border-gray-50">${b.image?`<img src="${b.image}" class="w-full h-28 object-cover" onerror="this.style.display='none'">`:'<div class="w-full h-16 bg-light flex items-center justify-center text-gray-300"><i class="ph ph-image text-3xl"></i></div>'}<div class="p-3 flex items-center justify-between"><div><p class="font-medium text-sm">${b.title||'(بدون عنوان)'}</p><span class="text-[11px] px-2 py-0.5 rounded-full ${b._t==='banners'?'bg-blue-50 text-blue-500':'bg-red-50 text-primary'}">${b._l}</span></div><div class="flex gap-2"><button onclick="openBannerModal('${b.id}','${b._t}')" class="w-8 h-8 bg-blue-50 text-blue-500 rounded-[8px] flex items-center justify-center hover:bg-blue-100"><i class="ph ph-pencil-simple text-sm"></i></button><button onclick="confirmDelete('banner','${b.id}','${b._t}')" class="w-8 h-8 bg-red-50 text-red-500 rounded-[8px] flex items-center justify-center hover:bg-red-100"><i class="ph ph-trash text-sm"></i></button></div></div></div>`).join('');
+}
+function openBannerModal(id=null,type=null){
+    clearForm(['banner-id','banner-title','banner-subtitle','banner-image','banner-link']);
+    document.getElementById('banner-type').value=type||'banners';
+    document.getElementById('banner-modal-title').textContent=id?'تعديل بانر':'إضافة بانر';
+    const p=document.getElementById('banner-img-prev');if(p){p.classList.add('hidden');p.querySelector('img').src='';}
+    if(id&&type){const arr=type==='banners'?adminData.banners:adminData.promo_banners;const b=arr.find(x=>x.id===id);if(b){document.getElementById('banner-id').value=b.id;document.getElementById('banner-type').value=type;document.getElementById('banner-title').value=b.title||'';document.getElementById('banner-subtitle').value=b.subtitle||'';document.getElementById('banner-image').value=b.image||'';document.getElementById('banner-link').value=b.link||'';if(b.image&&p){p.classList.remove('hidden');p.querySelector('img').src=b.image;}}}
+    openModal('banner-modal');
+}
+async function saveBanner(){
+    const id=document.getElementById('banner-id').value,type=document.getElementById('banner-type').value;
+    const image=document.getElementById('banner-image').value.trim();
+    if(!image) return showToast('رابط الصورة مطلوب','error');
+    const d={id:id||'b'+Date.now(),title:document.getElementById('banner-title').value.trim(),subtitle:document.getElementById('banner-subtitle').value.trim(),image,link:document.getElementById('banner-link').value.trim()};
+    const arr=type==='banners'?adminData.banners:adminData.promo_banners;
+    if(id){const i=arr.findIndex(b=>b.id===id);if(i>-1)arr[i]=d;}else arr.push(d);
+    try{await updateField(type,arr);closeModal('banner-modal');renderBannersAdmin();showToast('تم الحفظ ✓');}catch(e){showToast('خطأ: '+e.message,'error');}
+}
+
+// ══════════════════════════════════════════════════════════════
+// DELETE
+// ══════════════════════════════════════════════════════════════
+function confirmDelete(type,id,extra=null){
+    document.getElementById('confirm-delete-btn').onclick=async()=>{
+        try{
+            if(type==='cat'){adminData.categories=adminData.categories.filter(c=>c.id!==id);await updateField('categories',adminData.categories);renderCategoriesAdmin();}
+            else if(type==='prod'){adminData.products=adminData.products.filter(p=>p.id!==id);await updateField('products',adminData.products);renderProductsAdmin();}
+            else if(type==='banner'){if(extra==='banners'){adminData.banners=adminData.banners.filter(b=>b.id!==id);await updateField('banners',adminData.banners);}else{adminData.promo_banners=adminData.promo_banners.filter(b=>b.id!==id);await updateField('promo_banners',adminData.promo_banners);}renderBannersAdmin();}
+            showToast('تم الحذف ✓');
+        }catch(e){showToast('فشل: '+e.message,'error');}
+        closeModal('confirm-modal');
+    };
+    openModal('confirm-modal');
+}
+
+// ══════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════
+function openModal(id){document.getElementById(id)?.classList.add('active');}
+function closeModal(id){document.getElementById(id)?.classList.remove('active');}
+function clearForm(ids){ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';}); }
+function showToast(msg,type='success'){const t=document.getElementById('admin-toast');t.textContent=msg;t.style.background=type==='error'?'#ef4444':type==='info'?'#3b82f6':'#111111';t.style.opacity='1';setTimeout(()=>{t.style.opacity='0';},2500);}
+
+document.querySelectorAll('.modal-overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);}));
+
+window.adminLogin=adminLogin;window.adminLogout=adminLogout;window.switchTab=switchTab;
+window.openCatModal=openCatModal;window.saveCategory=saveCategory;
+window.openProdModal=openProdModal;window.saveProduct=saveProduct;
+window.openBannerModal=openBannerModal;window.saveBanner=saveBanner;
+window.confirmDelete=confirmDelete;window.closeModal=closeModal;
+</script>
+</body>
+</html>
